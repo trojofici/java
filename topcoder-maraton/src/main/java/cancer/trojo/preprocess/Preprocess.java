@@ -1,10 +1,12 @@
 package cancer.trojo.preprocess;
 
 import static org.bytedeco.javacpp.opencv_core.BORDER_DEFAULT;
+import static org.bytedeco.javacpp.opencv_core.*;
 import static org.bytedeco.javacpp.opencv_imgcodecs.CV_LOAD_IMAGE_COLOR;
 import static org.bytedeco.javacpp.opencv_imgcodecs.CV_LOAD_IMAGE_GRAYSCALE;
 import static org.bytedeco.javacpp.opencv_imgcodecs.imread;
 import static org.bytedeco.javacpp.opencv_imgcodecs.imwrite;
+import static org.bytedeco.javacpp.opencv_imgcodecs.*;
 import static org.bytedeco.javacpp.opencv_imgproc.ADAPTIVE_THRESH_GAUSSIAN_C;
 import static org.bytedeco.javacpp.opencv_imgproc.GaussianBlur;
 import static org.bytedeco.javacpp.opencv_imgproc.Laplacian;
@@ -16,6 +18,7 @@ import static org.bytedeco.javacpp.opencv_imgproc.adaptiveThreshold;
 import static org.bytedeco.javacpp.opencv_imgproc.calcHist;
 import static org.bytedeco.javacpp.opencv_imgproc.resize;
 import static org.bytedeco.javacpp.opencv_imgproc.threshold;
+import static org.bytedeco.javacpp.opencv_imgproc.*;
 
 import java.io.File;
 import java.util.concurrent.ExecutorService;
@@ -99,7 +102,7 @@ public class Preprocess {
 	public static void processInput(File file) {
 		//processInputCropColor(file);
 		//processHistogram(file);
-		processHalfSize(file);
+		processRotateHalfSize(file);
 	}
 	
 	public static void processInputCropGray(File file) {
@@ -269,6 +272,49 @@ public class Preprocess {
 		
 		//image.release();
 	}
+	static int minRows = Integer.MAX_VALUE;
+	static int minCols = Integer.MAX_VALUE;
+	static Object synco = new Object();
+	
+	public static void processRotateHalfSize(File file) {
+		int counter0 = counter.incrementAndGet(); 
+		System.out.println(counter0+".Processing File " + file.getAbsolutePath());
+		Mat image = imread(file.getAbsolutePath(), CV_LOAD_IMAGE_COLOR);
+		
+		int width = image.cols();
+		int height = image.rows();
+		if(height>width) {
+			Mat trans = new Mat();
+			transpose(image, trans);
+			image = trans;
+			width = image.cols();
+			height = image.rows();
+		}
+
+		resize(image, image, new Size(width/2, height/2));
+		String toSavePath = PROCESSED_ROOT + "/" + appendFileName(file.getName(), "_half");
+		File tmp = new File(toSavePath);
+		imwrite(tmp.getAbsolutePath(), image);
+		image.release();
+		
+		
+		/*String toSavePath = OUTPUT_ROOT + "/gray_" + file.getName();
+		File tmp = new File(toSavePath);
+		System.out.println(counter0+".To save " + tmp.getAbsolutePath());
+		imwrite(tmp.getAbsolutePath(), image);*/
+		synchronized(synco) {
+			if(minRows>height) {
+				minRows = height;
+			}
+			if(minCols>width) {
+				minCols = width;
+			}
+		}
+		System.out.println(minRows+":"+minCols);
+		
+		//image.release();
+	}
+	
 	
 	
 	public static void processHalfSize(File file) {

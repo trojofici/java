@@ -84,7 +84,7 @@ public class Executor {
 	protected static BasicNetwork network = new BasicNetwork();
 	protected static int trainInputSize = 0;
 	static AtomicInteger counter = new AtomicInteger(0);
-	public static int threadPoolSize = 4;
+	public static int threadPoolSize = 3;
 
 	protected static String CASE_FILE_POSTFIX = "-TS_half.png";
 
@@ -307,19 +307,31 @@ public class Executor {
 		Sobel(colorImage, df_dx, depth, 1, 0);
 		Sobel(colorImage, df_dy, depth, 0, 1);
 		List<Double> toReturn = new ArrayList<>();
-		toReturn.addAll(loadDataHistogram(df_dx));
-		toReturn.addAll(loadDataHistogram(df_dy));
+		toReturn.addAll(loadDataHistogram(df_dx, 5,2,5, true));
+		toReturn.addAll(loadDataHistogram(df_dy, 5,2,5, true));
 		df_dx.release();
 		df_dy.release();
 		return toReturn;
 	}
 	
+	protected static List<Double> loadSubImageHistograms(Mat color) {
+		//Min image 377:810
+		List<Double> toReturn = new ArrayList<>();
+		int heigth = color.rows();
+		int width = color.cols();
+		
+		
+		
+		return toReturn;
+	}
+	
+	
 	protected static List<Double> loadGausHistograms(Mat colorImage) {
 		List<Double> toReturn = new ArrayList<>();
 		int kSize = 91;
-		int count = 4;
-		double sigma = 0.5d;
-		double sigmaStep = 2.5d;
+		int count = 5;
+		double sigma = 1d;
+		double sigmaStep = 2d;
 		double sigmaOuterQ = 2d;
 		Mat output = new Mat();
 		Mat gaus = new Mat();
@@ -337,8 +349,8 @@ public class Executor {
 
 	public static List<Double> loadDataHistogram(Mat colorImage) {
 		//return loadDataHistogram(colorImage, 7, 2, 7, true);
-		return loadDataHistogram(colorImage, 10, 2, 10, true);
-		//return loadDataHistogram(colorImage, 15, 10, 15, true);
+		//return loadDataHistogram(colorImage, 10, 2, 10, true);
+		return loadDataHistogram(colorImage, 20, 10, 20, true);
 		//return loadDataHistogram(colorImage, 3, 3, 3, true);
 	}
 
@@ -529,7 +541,7 @@ public class Executor {
 
 		toPut0.addAll(loadDataHistogram(m));
 		toPut0.addAll(loadSobelHistograms(m));
-		toPut0.addAll(loadGausHistograms(m));
+		//toPut0.addAll(loadGausHistograms(m));
 		
 
 		// trainInputSize = toPut0.size();

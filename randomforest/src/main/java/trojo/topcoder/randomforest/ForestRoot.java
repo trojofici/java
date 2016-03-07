@@ -30,13 +30,12 @@ public class ForestRoot {
 		public double cutoffError = 0.01;
 		public int maxLevel = 500;
 		public long maxTime = 150000;
-		public double usedEntriesPercentage = 0.8f;
-		public double usedFeaturesPercentage = 0.8f;
+		public double usedEntriesPercentage = 1.0f;
+		public double usedFeaturesPercentage = 1.0f;
 		public boolean runParallel = true;
 		public int maxNumberOfRunners = 8;
 	}
-	/*
-	public static class ForestSettings {
+	/*public static class ForestSettings {
 		public int maxTrees = 1;
 		public double cutoffError = 0.01;
 		public int maxLevel = 500;
@@ -181,10 +180,10 @@ public class ForestRoot {
 				long elapsedTime = 0;
 				while (true) {
 					try {
-						System.out.println("Wait for build tree trainedCnt:" + trainedCnt + ", scheduledCnt:" + scheduledCnt);
+						//System.out.println("Wait for build tree trainedCnt:" + trainedCnt + ", scheduledCnt:" + scheduledCnt);
 						Future<RegressionTree> treeF = compService.take();
 						elapsedTime = System.currentTimeMillis() - startTime;
-						System.out.println("Build tree trainedCnt:" + trainedCnt + ", scheduledCnt:" + scheduledCnt);
+						//System.out.println("Build tree trainedCnt:" + trainedCnt + ", scheduledCnt:" + scheduledCnt);
 						this.add(treeF.get());
 						this.forestListener.onTreeBuild(scheduledCnt, trainedCnt, elapsedTime);
 					} catch (InterruptedException ex) {

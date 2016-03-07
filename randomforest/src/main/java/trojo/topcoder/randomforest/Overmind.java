@@ -1,6 +1,7 @@
 package trojo.topcoder.randomforest;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -22,6 +23,25 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		this.trainingEntries = this.extractData(trainingEntries);
 		this.testEntries = this.extractData(testEntries);
 	}
+	
+	public static class DoubleProblem extends Problem<DoubleEntry> {
+
+		@Override
+		public ProblemEntryData<DoubleEntry> extractData(DoubleEntry entry) {
+			ProblemEntryData<DoubleEntry> toReturn = new ProblemEntryData<DoubleEntry>(entry);
+			for (int i = 0; i < entry.vals.length; i++) {
+				toReturn.features.add(new Feature("val"+i, entry.vals[i]));
+			}
+			return toReturn;
+		}
+
+		@Override
+		public void completeData(DoubleEntry sourceEntry, ProblemEntryData<DoubleEntry> entryData) {
+			//ahem
+		}
+		
+	}
+	
 
 	public static abstract class Problem<X extends ProblemEntry> {
 		public abstract ProblemEntryData<X> extractData(X entry);
@@ -70,7 +90,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		int feaureCount = testEntries.get(0).features.size();
 		double[] testData = new double[feaureCount + F_I];
 		double entryId = 0.0f;
-		for (int i = 0; i < testData.length; i++) {
+		for (int i = 0; i < testEntries.size(); i++) {
 			ProblemEntryData<X> entryData = testEntries.get(i);
 			for (int j = 0; j < feaureCount; j++) {
 				testData[j + F_I] = entryData.features.get(j).value;
@@ -106,7 +126,18 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	private ProblemEntryData<X> extractData(X entry) {
 		return problem.extractData(entry);
 	}
+	
+	public static class DoubleEntry extends ProblemEntry{
+		double[] vals;
+		public DoubleEntry(double id, double[] vals, double output) {
+			super(id);
+			this.vals = vals;
+			this.setOutput(output);
+		}
 
+	}
+	
+	
 	public static abstract class ProblemEntry {
 		double id;
 		ProblemEntryData entryData;
@@ -191,8 +222,10 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	@Override
 	public void onTreeBuild(int scheduledCount, int trainedCount, long elapsedTime) {
 		//System.out.println("A tree has been built scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
-		if(trainedCount==1) System.out.println("A tree has been built scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
-		if(trainedCount%10==0) System.out.println("A tree has been built scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
+		//if(trainedCount==1) System.out.println("A tree has been built scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
+		if(trainedCount%10==0) {
+			System.out.println("A tree has been built scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
+		}
 		
 	}
 }

@@ -330,8 +330,8 @@ public class Executor {
 		List<Double> toReturn = new ArrayList<>();
 		int kSize = 91;
 		int count = 5;
-		double sigma = 1d;
-		double sigmaStep = 2d;
+		double sigma = 0.1d;
+		double sigmaStep = 0.5d;
 		double sigmaOuterQ = 2d;
 		Mat output = new Mat();
 		Mat gaus = new Mat();

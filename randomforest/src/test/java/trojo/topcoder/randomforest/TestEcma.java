@@ -15,7 +15,7 @@ public class TestEcma {
 		Bindings bindings = scriptEngine.createBindings();
 		bindings.put("a", 12.3f);
 		Object result = compiledScript.eval(bindings);
-		System.out.println("result = " + result + " (" + result.getClass().getName() + ")");
+		System.out.println("result2 = " + result + " (" + result.getClass().getName() + ")");
 		
 	}
 

@@ -24,20 +24,31 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		this.testEntries = this.extractData(testEntries);
 	}
 	
-	public static class DoubleProblem extends Problem<DoubleEntry> {
+	public static class DoubleProblem extends EcmaProblem<DoubleEntry> {
 
 		@Override
 		public ProblemEntryData<DoubleEntry> extractData(DoubleEntry entry) {
 			ProblemEntryData<DoubleEntry> toReturn = new ProblemEntryData<DoubleEntry>(entry);
 			for (int i = 0; i < entry.vals.length; i++) {
-				toReturn.features.add(new Feature("val"+i, entry.vals[i]));
+				toReturn.features.add(new InputFeature("val"+i, entry.vals[i]));
 			}
 			return toReturn;
 		}
-
+	}
+	
+	public abstract static class EcmaProblem<X extends ProblemEntry> extends Problem<X> {
 		@Override
-		public void completeData(DoubleEntry sourceEntry, ProblemEntryData<DoubleEntry> entryData) {
-			//ahem
+		public void completeData(X sourceEntry, ProblemEntryData<X> entryData) {
+			List<AbstractFeature> ecmaFeatures = new LinkedList<AbstractFeature>();
+			for (int i = 0; i < entryData.features.size(); i++) {
+				for (int j = i+1; j < entryData.features.size(); j++) {
+					AbstractFeature f1 = entryData.features.get(i);
+					AbstractFeature f2 = entryData.features.get(i);
+					EcmaFeature toAdd = new EcmaFeature(f1.description+"+"+f2.description, f1.getVal()+f2.getVal());
+					ecmaFeatures.add(toAdd);
+				}
+			}
+			entryData.features.addAll(ecmaFeatures);
 		}
 		
 	}
@@ -73,7 +84,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			ProblemEntryData<X> entryData = trainingEntries.get(i);
 			for (int j = 0; j < feaureCount; j++) {
 				//System.out.println("entryData.features.get(j).value:"+entryData.features.get(j).value);
-				trainData[i][j + F_I] = entryData.features.get(j).value;
+				trainData[i][j + F_I] = entryData.features.get(j).getVal();
 			}
 			trainData[i][0] = entryId;
 			trainData[i][1] = entryData.getOutput();
@@ -93,7 +104,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		for (int i = 0; i < testEntries.size(); i++) {
 			ProblemEntryData<X> entryData = testEntries.get(i);
 			for (int j = 0; j < feaureCount; j++) {
-				testData[j + F_I] = entryData.features.get(j).value;
+				testData[j + F_I] = entryData.features.get(j).getVal();
 
 			}
 			testData[0] = entryId;
@@ -161,10 +172,6 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		}
 	}
 
-	public static enum FeatureType {
-		input, calculated
-	}
-
 	public static enum FeatureCompletionType {
 		average, custom, regression
 	}
@@ -172,7 +179,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	public static class ProblemEntryData<X extends ProblemEntry> {
 		X source;
 		private double id;
-		public List<Feature> features = new LinkedList<Overmind.Feature>();
+		public List<AbstractFeature> features = new LinkedList<AbstractFeature>();
 		private double output;
 
 		public ProblemEntryData(X source) {
@@ -196,27 +203,39 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			source.setOutput(output);
 		}
 	}
-
-	public static class Feature {
-		FeatureType type;
+	
+	public static class EcmaFeature extends InputFeature {
+		public EcmaFeature(String description, double value) {
+			super(description, value);
+		}
+	}
+	
+	public static class InputFeature extends AbstractFeature
+	{
 		FeatureCompletionType completionType;
-		String description;
 		double value;
 
-		public Feature(FeatureType type, String description, double value, FeatureCompletionType completionType) {
-			this.type = type;
+		public InputFeature(String description, double value, FeatureCompletionType completionType) {
 			this.description = description;
 			this.value = value;
 			this.completionType = completionType;
 		}
 
-		public Feature(String description, double value) {
-			this.type = FeatureType.input;
+		public InputFeature(String description, double value) {
 			this.description = description;
 			this.value = value;
 			this.completionType = FeatureCompletionType.regression;
 		}
 
+		@Override
+		public double getVal() {
+			return this.value;
+		}
+	}
+
+	public abstract static class AbstractFeature {
+		String description;
+		public abstract double getVal();
 	}
 
 	@Override

@@ -9,7 +9,7 @@ import javax.script.ScriptException;
 
 public class TestEcma {
 	public static void main(String[] args) throws ScriptException {
-		String expr = "Math.sin(a)";
+		String expr = "Math.sin(2*a)";
 		ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
 		CompiledScript compiledScript = ((Compilable) scriptEngine).compile(expr);
 		Bindings bindings = scriptEngine.createBindings();

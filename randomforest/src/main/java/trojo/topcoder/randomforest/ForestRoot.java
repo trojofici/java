@@ -16,6 +16,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.apache.commons.lang3.builder.ToStringBuilder;
+
 public class ForestRoot {
 	// public static Logger log = Logger.getLogger(ForestRoot.class.getName());
 	public static final int F_I = 2;
@@ -26,7 +28,7 @@ public class ForestRoot {
 	}
 	
 	public static class ForestSettings {
-		public int maxTrees = 100;
+		public int maxTrees = 10;
 		public double cutoffError = 0.01;
 		public int maxLevel = 500;
 		public long maxTime = 150000;
@@ -53,6 +55,10 @@ public class ForestRoot {
 
 	public static class TreesInfo {
 		public int[] usedFeatures;
+		@Override
+		public String toString() {
+			return ToStringBuilder.reflectionToString(this);
+		}
 	}
 
 	public static class TreeInfo {
@@ -62,6 +68,11 @@ public class ForestRoot {
 	public static class ForestInfo {
 		public int numberOfTrees;
 		public List<TreesInfo> epochInfo = new LinkedList<TreesInfo>();
+		@Override
+		public String toString() {
+			//ToStringBuilder ts = new ToStringBuilder(this);
+			return ToStringBuilder.reflectionToString(this);
+		}
 	}
 
 	public static class RandomForest {

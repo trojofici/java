@@ -5,9 +5,18 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import javax.script.Bindings;
+import javax.script.Compilable;
+import javax.script.CompiledScript;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
+
+import trojo.topcoder.randomforest.ForestRoot.ForestInfo;
 import trojo.topcoder.randomforest.ForestRoot.ForestListener;
 import trojo.topcoder.randomforest.ForestRoot.ForestSettings;
 import trojo.topcoder.randomforest.ForestRoot.RandomForest;
+import trojo.topcoder.randomforest.ForestRoot.TreesInfo;
 import trojo.topcoder.randomforest.Overmind.ProblemEntry;
 
 public class Overmind<X extends ProblemEntry> implements ForestListener {
@@ -23,45 +32,90 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		this.trainingEntries = this.extractData(trainingEntries);
 		this.testEntries = this.extractData(testEntries);
 	}
-	
-	public static class DoubleProblem extends Problem<DoubleEntry> {
+
+	public static class DoubleProblem extends EcmaProblem<DoubleEntry> {
 
 		@Override
 		public ProblemEntryData<DoubleEntry> extractData(DoubleEntry entry) {
 			ProblemEntryData<DoubleEntry> toReturn = new ProblemEntryData<DoubleEntry>(entry);
 			for (int i = 0; i < entry.vals.length; i++) {
-				toReturn.features.add(new Feature("val"+i, entry.vals[i]));
+				toReturn.features.add(new InputFeature("input" + i, entry.vals[i]));
 			}
 			return toReturn;
 		}
+	}
 
+	public abstract static class EcmaProblem<X extends ProblemEntry> extends Problem<X> {
+		ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
+		Bindings bindings = scriptEngine.createBindings();
+		boolean initialized = false;
+		
 		@Override
-		public void completeData(DoubleEntry sourceEntry, ProblemEntryData<DoubleEntry> entryData) {
-			//ahem
+		public void completeDataStart() {
+			super.completeDataStart();
+			initialized = false;
 		}
 		
+		@Override
+		public void completeDataEnd() {
+			super.completeDataEnd();
+		}
+		
+		//public abstract 
+		
+		@Override
+		public void completeData(X sourceEntry, ProblemEntryData<X> entryData) {
+			if(!this.initialized) {
+				
+			}
+			List<AbstractFeature> features0 = sourceEntry.entryData.features;
+			List<AbstractFeature> ecmaFeatures = new LinkedList<AbstractFeature>();
+			for (int i = 0; i < features0.size(); i++) {
+				AbstractFeature f0 = features0.get(i);
+				if (!(f0 instanceof EcmaFeature)) {
+					bindings.put(f0.description, f0.value);
+				}
+			}
+			for (int i = 0; i < features0.size(); i++) {
+				AbstractFeature f1 = features0.get(i);
+				for (int j = i + 1; j < features0.size(); j++) {
+					AbstractFeature f2 = features0.get(j);
+					String desc = f1.description + "*" + f2.description;
+					CompiledScript compiledScript;
+					try {
+						compiledScript = ((Compilable) scriptEngine).compile(desc);
+						Object result = compiledScript.eval(bindings);
+						EcmaFeature toAdd = new EcmaFeature(desc, (Double) result);
+						ecmaFeatures.add(toAdd);
+					} catch (ScriptException e) {
+						e.printStackTrace();
+					}
+
+				}
+
+			}
+			features0.addAll(ecmaFeatures);
+		}
 	}
-	
 
 	public static abstract class Problem<X extends ProblemEntry> {
 		public abstract ProblemEntryData<X> extractData(X entry);
-
+		public void completeDataStart() {};
 		public abstract void completeData(X sourceEntry, ProblemEntryData<X> entryData);
+		public void completeDataEnd(){};
 	}
 
 	public void completeEntries() {
 		// TODO implement data completion
-		
-		
-		
-		
-		
+		System.out.println("completeEntries start");
 		for (ProblemEntryData<X> problemEntryData : trainingEntries) {
 			problem.completeData(problemEntryData.source, problemEntryData);
 		}
+		System.out.println("completeEntries test start");
 		for (ProblemEntryData<X> problemEntryData : testEntries) {
 			problem.completeData(problemEntryData.source, problemEntryData);
 		}
+		System.out.println("completeEntries end");
 
 	}
 
@@ -72,14 +126,14 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		for (int i = 0; i < trainData.length; i++) {
 			ProblemEntryData<X> entryData = trainingEntries.get(i);
 			for (int j = 0; j < feaureCount; j++) {
-				//System.out.println("entryData.features.get(j).value:"+entryData.features.get(j).value);
+				// System.out.println("entryData.features.get(j).value:"+entryData.features.get(j).value);
 				trainData[i][j + F_I] = entryData.features.get(j).value;
 			}
 			trainData[i][0] = entryId;
 			trainData[i][1] = entryData.getOutput();
-			//System.out.println(trainData[i][1]);
+			// System.out.println(trainData[i][1]);
 			entryId += 1.0f;
-			//System.out.println("Train data:"+Arrays.toString(trainData[i]));
+			// System.out.println("Train data:"+Arrays.toString(trainData[i]));
 		}
 		ForestSettings settings = new ForestSettings();
 		this.forest.executeTraining(trainData, settings);
@@ -97,7 +151,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 
 			}
 			testData[0] = entryId;
-			//System.out.println("Test data:"+Arrays.toString(testData));
+			// System.out.println("Test data:"+Arrays.toString(testData));
 			double output = this.forest.predict(testData);
 			entryData.setOutput(output);
 			entryId += 1.0f;
@@ -126,9 +180,10 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	private ProblemEntryData<X> extractData(X entry) {
 		return problem.extractData(entry);
 	}
-	
-	public static class DoubleEntry extends ProblemEntry{
+
+	public static class DoubleEntry extends ProblemEntry {
 		double[] vals;
+
 		public DoubleEntry(double id, double[] vals, double output) {
 			super(id);
 			this.vals = vals;
@@ -136,33 +191,29 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		}
 
 	}
-	
-	
+
 	public static abstract class ProblemEntry {
 		double id;
 		ProblemEntryData entryData;
 		double output;
 
 		public double getOutput() {
-			//System.out.println("getOutput():"+this+":"+output);
+			// System.out.println("getOutput():"+this+":"+output);
 			return output;
 		}
 
 		public void setOutput(double output) {
-			//System.out.println("setOutput0():"+this+":"+output);
+			// System.out.println("setOutput0():"+this+":"+output);
 			this.output = output;
 		}
 
 		public ProblemEntry(double id) {
 			this.id = id;
 		}
+
 		public double getId() {
 			return id;
 		}
-	}
-
-	public static enum FeatureType {
-		input, calculated
 	}
 
 	public static enum FeatureCompletionType {
@@ -172,7 +223,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	public static class ProblemEntryData<X extends ProblemEntry> {
 		X source;
 		private double id;
-		public List<Feature> features = new LinkedList<Overmind.Feature>();
+		public List<AbstractFeature> features = new LinkedList<AbstractFeature>();
 		private double output;
 
 		public ProblemEntryData(X source) {
@@ -181,51 +232,73 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			this.source.entryData = this;
 			this.output = source.output;
 		}
-		
+
 		public double getId() {
 			return id;
 		}
-		
+
 		public double getOutput() {
 			return output;
 		}
-		
+
 		protected void setOutput(double output) {
-			//System.out.println("setOutput():"+this+":"+output);
+			// System.out.println("setOutput():"+this+":"+output);
 			this.output = output;
 			source.setOutput(output);
 		}
 	}
 
-	public static class Feature {
-		FeatureType type;
-		FeatureCompletionType completionType;
-		String description;
-		double value;
+	public static class EcmaFeature extends AbstractFeature {
+		public EcmaFeature(String description, double value) {
+			super(description, value);
+		}
+	}
 
-		public Feature(FeatureType type, String description, double value, FeatureCompletionType completionType) {
-			this.type = type;
-			this.description = description;
-			this.value = value;
+	public static class InputFeature extends AbstractFeature {
+		FeatureCompletionType completionType;
+
+		public InputFeature(String description, double value, FeatureCompletionType completionType) {
+			super(description, value);
 			this.completionType = completionType;
 		}
 
-		public Feature(String description, double value) {
-			this.type = FeatureType.input;
+		public InputFeature(String description, double value) {
+			this(description, value, FeatureCompletionType.regression);
+		}
+
+	}
+
+	public abstract static class AbstractFeature {
+		String description;
+		double value;
+
+		public AbstractFeature(String description, double value) {
 			this.description = description;
 			this.value = value;
-			this.completionType = FeatureCompletionType.regression;
 		}
 
 	}
 
 	@Override
 	public void onTreeBuild(int scheduledCount, int trainedCount, long elapsedTime) {
-		//System.out.println("A tree has been built scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
-		//if(trainedCount==1) System.out.println("A tree has been built scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
-		if(trainedCount%10==0) {
-			System.out.println("A tree has been built scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
+		// System.out.println("A tree has been built
+		// scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
+		// if(trainedCount==1) System.out.println("A tree has been built
+		// scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
+		if (trainedCount % 10 == 0) {
+			System.out.println("A tree has been built scheduledCount:" + scheduledCount + ",builCount:" + trainedCount
+					+ ",elapsedTime:" + elapsedTime);
 		}
-		
+
+	}
+
+	public void writeUsedFeatures() {
+		ForestInfo info = this.forest.getForestInfo();
+		TreesInfo tInfo = info.epochInfo.get(info.epochInfo.size() - 1);
+		List<AbstractFeature> features = this.trainingEntries.get(0).features;
+		for (int i = F_I; i < tInfo.usedFeatures.length; i++) {
+			System.out.println(features.get(i-F_I).description + "\t\t:" + tInfo.usedFeatures[i]);
+		}
+
 	}
 }

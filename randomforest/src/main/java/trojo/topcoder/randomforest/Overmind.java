@@ -21,7 +21,8 @@ import trojo.topcoder.randomforest.ForestRoot.ForestSettings;
 import trojo.topcoder.randomforest.ForestRoot.RandomForest;
 import trojo.topcoder.randomforest.ForestRoot.TreesInfo;
 import trojo.topcoder.randomforest.Overmind.ProblemEntry;
-import trojo.topcoder.randomforest.Overmind.UsageFeature.UsageFeatureType;
+import trojo.topcoder.randomforest.Overmind.UsageFeature.FeatureDataType;
+import trojo.topcoder.randomforest.Overmind.UsageFeature.FeatureUsageType;
 
 public class Overmind<X extends ProblemEntry> implements ForestListener {
 	public static final int F_I = 2;
@@ -38,7 +39,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		this.testEntries = this.extractData(testEntries);
 		List<AbstractFeature> fes = trainingEntries.get(0).entryData.features;
 		for (AbstractFeature fe : fes) {
-			usedFeatures.add(new UsageFeature(fe.description, UsageFeatureType.INPUT, 0));
+			usedFeatures.add(new UsageFeature(fe.description, fe.getUsageType(), fe.getDataType(), 0));
 		}
 	}
 
@@ -48,7 +49,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		public ProblemEntryData<DoubleEntry> extractData(DoubleEntry entry) {
 			ProblemEntryData<DoubleEntry> toReturn = new ProblemEntryData<DoubleEntry>(entry);
 			for (int i = 0; i < entry.vals.length; i++) {
-				toReturn.features.add(new InputFeature("i" + i, entry.vals[i]));
+				toReturn.features.add(new InputFeature("i" + i, entry.vals[i], FeatureDataType.DOUBLE));
 			}
 			return toReturn;
 		}
@@ -58,6 +59,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
 		Bindings bindings = scriptEngine.createBindings();
 		protected Map<String, CompiledScript> ecmaFeatureScripts = new ConcurrentHashMap<String, CompiledScript>();
+		protected Map<String, FeatureDataType> ecmaFeatureDataTypes = new ConcurrentHashMap<String, FeatureDataType>();
 		
 		@Override
 		public void completeDataStart(List<UsageFeature> usedFeatures) {
@@ -70,32 +72,47 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			super.completeDataEnd(usedFeatures);
 		}
 		
+		protected static class BaseDescription {
+			String description;
+			FeatureDataType dataType;
+			public BaseDescription(String description, FeatureDataType dataType) {
+				this.description = description;
+				this.dataType = dataType;
+			}
+		}
+		
 		protected void prepareEcmaOperations(List<UsageFeature> usedFeatures) {
-			double minUsage = 0.1d;
+			double minUsage = 0.01;
 			ecmaFeatureScripts.clear();
-			List<String> baseDescriptions = new LinkedList<String>();
+			ecmaFeatureDataTypes.clear();
+			List<BaseDescription> baseDescriptions = new ArrayList<BaseDescription>();
 			for (UsageFeature fe : usedFeatures) {
-				if(fe.featureType==UsageFeatureType.INPUT) {
-					baseDescriptions.add(fe.description);
-				} else if(fe.usedRatio>minUsage){
-					baseDescriptions.add(fe.description);
+				if(fe.featureType==FeatureUsageType.INPUT) {
+					baseDescriptions.add(new BaseDescription(fe.description, fe.dataType));
+				} else if(fe.usedRatio>minUsage) {
+					baseDescriptions.add(new BaseDescription(fe.description, fe.dataType));
 				}
 			}
 			
 			for (int i = 0; i < baseDescriptions.size(); i++) {
-				String d1 = baseDescriptions.get(i);
+				BaseDescription d1 = baseDescriptions.get(i);
 				for (int j = i+1; j < baseDescriptions.size(); j++) {
-					String d2 = baseDescriptions.get(j);
+					BaseDescription d2 = baseDescriptions.get(j);
 					try {
-						String newKey = "("+d1+")+("+d2+")";
-						CompiledScript compiledScript = ((Compilable) scriptEngine).compile(newKey);
-						ecmaFeatureScripts.put(newKey, compiledScript);
-						newKey = "("+d1+")*("+d2+")";
-						compiledScript = ((Compilable) scriptEngine).compile(newKey);
-						ecmaFeatureScripts.put(newKey, compiledScript);
-						//newKey = "("+d1+")/("+d2+")";
-						//compiledScript = ((Compilable) scriptEngine).compile(newKey);
-						//ecmaFeatureScripts.put(newKey, compiledScript);
+						if(d1.dataType!=d2.dataType) continue;
+						if(d1.dataType==FeatureDataType.DOUBLE) {
+							String newKey = "("+d1.description+")+("+d2.description+")";
+							CompiledScript compiledScript = ((Compilable) scriptEngine).compile(newKey);
+							ecmaFeatureScripts.put(newKey, compiledScript);
+							ecmaFeatureDataTypes.put(newKey, d1.dataType);
+							newKey = "("+d1.description+")*("+d2.description+")";
+							compiledScript = ((Compilable) scriptEngine).compile(newKey);
+							//ecmaFeatureScripts.put(newKey, compiledScript);
+							ecmaFeatureDataTypes.put(newKey, d1.dataType);
+							//newKey = "("+d1.description+")/("+d2.description+")";
+							//compiledScript = ((Compilable) scriptEngine).compile(newKey);
+							//ecmaFeatureScripts.put(newKey, compiledScript);
+						}
 					} catch (ScriptException e) {
 						e.printStackTrace();
 					}
@@ -116,6 +133,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			
 			for (String desc : ecmaFeatureScripts.keySet()) {
 				CompiledScript script = ecmaFeatureScripts.get(desc);
+				FeatureDataType type = ecmaFeatureDataTypes.get(desc);
 				try {
 					Object result0 = script.eval(bindings);
 					Double result = (Double)result0;
@@ -123,7 +141,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 						//System.out.println("Lolo");
 						result = Double.MIN_VALUE/2;
 					}
-					EcmaFeature toAdd = new EcmaFeature(desc, result);
+					EcmaFeature toAdd = new EcmaFeature(desc, result, type);
 					ecmaFeatures.add(toAdd);
 				} catch (ScriptException e) {
 					e.printStackTrace();
@@ -134,7 +152,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	}
 
 	public static abstract class Problem<X extends ProblemEntry> {
-		public abstract ProblemEntryData<X> extractData(X entry);
+		public abstract ProblemEntryData<X> extractData(X entry) throws Exception;
 		public void completeDataStart(List<UsageFeature> usedFeatures) {};
 		public abstract void completeData(X sourceEntry, ProblemEntryData<X> entryData, List<UsageFeature> usedFeatures);
 		public void completeDataEnd(List<UsageFeature> usedFeatures){};
@@ -143,8 +161,14 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	public void completeEntries() {
 		problem.completeDataStart(usedFeatures);
 		System.out.println("completeEntries start");
+		int completionStep = trainingEntries.size()/20;
+		int i = 0;
 		for (ProblemEntryData<X> problemEntryData : trainingEntries) {
 			problem.completeData(problemEntryData.source, problemEntryData, usedFeatures);
+			i++;
+			if((i%completionStep)==0) {
+				System.out.println("Completed "+(i*100)/trainingEntries.size()+"%");
+			}
 		}
 		System.out.println("completeEntries test start");
 		for (ProblemEntryData<X> problemEntryData : testEntries) {
@@ -184,7 +208,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		double usedSum = 0.0d;
 		for (int i = F_I; i < tInfo.usedFeatures.length; i++) {
 			AbstractFeature fe = features.get(i-F_I);
-			this.usedFeatures.add(new UsageFeature(fe.description, fe.getUsageType(), tInfo.usedFeatures[i]));
+			this.usedFeatures.add(new UsageFeature(fe.description, fe.getUsageType(), fe.getDataType(), tInfo.usedFeatures[i]));
 			usedSum+=tInfo.usedFeatures[i];
 		}
 		
@@ -240,7 +264,13 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	}
 
 	private ProblemEntryData<X> extractData(X entry) {
-		return problem.extractData(entry);
+		try {
+			return problem.extractData(entry);
+		} catch (Throwable th) {
+			throw new RuntimeException("Failder extract id:"+entry.getId(),th);
+		}
+		
+		
 	}
 
 	public static class DoubleEntry extends ProblemEntry {
@@ -311,31 +341,45 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	}
 
 	public static class EcmaFeature extends AbstractFeature {
-		public EcmaFeature(String description, double value) {
+		FeatureDataType dataType;
+		public EcmaFeature(String description, double value, FeatureDataType dataType) {
 			super(description, value);
+			this.dataType = dataType;
 		}
 
 		@Override
-		public UsageFeatureType getUsageType() {
-			return UsageFeatureType.ECMA;
+		public FeatureUsageType getUsageType() {
+			return FeatureUsageType.ECMA;
+		}
+		
+		@Override
+		public FeatureDataType getDataType() {
+			return this.dataType;
 		}
 	}
 
 	public static class InputFeature extends AbstractFeature {
 		FeatureCompletionType completionType;
+		FeatureDataType dataType;
 
-		public InputFeature(String description, double value, FeatureCompletionType completionType) {
+		public InputFeature(String description, double value, FeatureDataType dataType, FeatureCompletionType completionType) {
 			super(description, value);
 			this.completionType = completionType;
+			this.dataType = dataType;
 		}
 
-		public InputFeature(String description, double value) {
-			this(description, value, FeatureCompletionType.regression);
+		public InputFeature(String description, double value, FeatureDataType dataType) {
+			this(description, value, dataType, FeatureCompletionType.regression);
 		}
 		
 		@Override
-		public UsageFeatureType getUsageType() {
-			return UsageFeatureType.INPUT;
+		public FeatureUsageType getUsageType() {
+			return FeatureUsageType.INPUT;
+		}
+		
+		@Override
+		public FeatureDataType getDataType() {
+			return this.dataType;
 		}
 
 	}
@@ -343,17 +387,23 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	
 	
 	public static class UsageFeature {
-		public static enum UsageFeatureType {
+		public static enum FeatureUsageType {
 			INPUT, ECMA;
 		}
+		public static enum FeatureDataType {
+			DOUBLE, BOOLEAN;
+		}
+		
 		String description;
-		UsageFeatureType featureType; 
+		FeatureUsageType featureType; 
+		FeatureDataType dataType;
 		int usedCount;
 		double usedRatio;
-		public UsageFeature(String description, UsageFeatureType type, int usedCount) {
+		public UsageFeature(String description, FeatureUsageType type, FeatureDataType dataType, int usedCount) {
 			this.description = description;
 			this.usedCount = usedCount;
 			this.featureType = type;
+			this.dataType = dataType;
 		}
 	}
 
@@ -365,7 +415,8 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			this.value = value;
 		}
 		
-		public abstract UsageFeatureType getUsageType();
+		public abstract FeatureUsageType getUsageType();
+		public abstract FeatureDataType getDataType();
 
 	}
 

@@ -159,11 +159,11 @@ public class ElectronicPartsClassification {
 		for (int i = 0; i < 4; i++) {
 			over.completeEntries();
 			over.train();
-			/*over.fillTestOutput();
+			over.fillTestOutput();
 			for (Iterator<ELEEntry> iterator = test.iterator(); iterator.hasNext();) {
 				ELEEntry problemEntryData = iterator.next();
 				System.out.println("Test output:"+problemEntryData.getOutput());
-			}*/
+			}
 			over.printUsedFeatures();
 			
 		}

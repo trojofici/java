@@ -7,6 +7,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.script.Bindings;
 import javax.script.Compilable;
@@ -26,13 +29,13 @@ import trojo.topcoder.randomforest.Overmind.UsageFeature.FeatureUsageType;
 
 public class Overmind<X extends ProblemEntry> implements ForestListener {
 	public static final int F_I = 2;
-	Problem<X> problem;
+	Problem<X, ? extends Object> problem;
 	RandomForest forest;
 	List<ProblemEntryData<X>> trainingEntries;
 	List<ProblemEntryData<X>> testEntries;
 	List<UsageFeature> usedFeatures = new LinkedList<UsageFeature>();
 
-	public Overmind(Problem<X> problem, List<X> trainingEntries, List<X> testEntries) {
+	public Overmind(Problem<X,?> problem, List<X> trainingEntries, List<X> testEntries) {
 		this.problem = problem;
 		this.forest = new RandomForest(this);
 		this.trainingEntries = this.extractData(trainingEntries);
@@ -54,12 +57,22 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			return toReturn;
 		}
 	}
-
-	public abstract static class EcmaProblem<X extends ProblemEntry> extends Problem<X> {
-		ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
-		Bindings bindings = scriptEngine.createBindings();
+	
+	public static class EcmaCompletionData {
+		//ScriptEngine scriptEngine;
+		Bindings bindings;
 		protected Map<String, CompiledScript> ecmaFeatureScripts = new ConcurrentHashMap<String, CompiledScript>();
 		protected Map<String, FeatureDataType> ecmaFeatureDataTypes = new ConcurrentHashMap<String, FeatureDataType>();
+		
+		public void initThreadStrucues() {
+			ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
+			this.bindings = scriptEngine.createBindings();
+		}
+		
+	}
+
+	public abstract static class EcmaProblem<X extends ProblemEntry> extends Problem<X,EcmaCompletionData> {
+		EcmaCompletionData rootCompletionData = new EcmaCompletionData();
 		
 		@Override
 		public void completeDataStart(List<UsageFeature> usedFeatures) {
@@ -81,10 +94,20 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			}
 		}
 		
+		@Override
+		public EcmaCompletionData completeDataThreadStart() {
+			EcmaCompletionData toReturn = new EcmaCompletionData();
+			toReturn.initThreadStrucues();
+			toReturn.ecmaFeatureDataTypes = this.rootCompletionData.ecmaFeatureDataTypes;
+			toReturn.ecmaFeatureScripts = this.rootCompletionData.ecmaFeatureScripts;
+			return toReturn;
+		}
+		
 		protected void prepareEcmaOperations(List<UsageFeature> usedFeatures) {
-			double minUsage = 0.01;
-			ecmaFeatureScripts.clear();
-			ecmaFeatureDataTypes.clear();
+			double minUsage = 0.05;
+			ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
+			this.rootCompletionData.ecmaFeatureScripts.clear();
+			this.rootCompletionData.ecmaFeatureDataTypes.clear();
 			List<BaseDescription> baseDescriptions = new ArrayList<BaseDescription>();
 			for (UsageFeature fe : usedFeatures) {
 				if(fe.featureType==FeatureUsageType.INPUT) {
@@ -101,14 +124,15 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 					try {
 						if(d1.dataType!=d2.dataType) continue;
 						if(d1.dataType==FeatureDataType.DOUBLE) {
+							//System.out.println("prepareEcmaOperations"+d1.description+":"+d2.description);
 							String newKey = "("+d1.description+")+("+d2.description+")";
 							CompiledScript compiledScript = ((Compilable) scriptEngine).compile(newKey);
-							ecmaFeatureScripts.put(newKey, compiledScript);
-							ecmaFeatureDataTypes.put(newKey, d1.dataType);
+							this.rootCompletionData.ecmaFeatureScripts.put(newKey, compiledScript);
+							this.rootCompletionData.ecmaFeatureDataTypes.put(newKey, d1.dataType);
 							newKey = "("+d1.description+")*("+d2.description+")";
 							compiledScript = ((Compilable) scriptEngine).compile(newKey);
-							//ecmaFeatureScripts.put(newKey, compiledScript);
-							ecmaFeatureDataTypes.put(newKey, d1.dataType);
+							this.rootCompletionData.ecmaFeatureScripts.put(newKey, compiledScript);
+							this.rootCompletionData.ecmaFeatureDataTypes.put(newKey, d1.dataType);
 							//newKey = "("+d1.description+")/("+d2.description+")";
 							//compiledScript = ((Compilable) scriptEngine).compile(newKey);
 							//ecmaFeatureScripts.put(newKey, compiledScript);
@@ -121,21 +145,21 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		}
 		
 		@Override
-		public void completeData(X sourceEntry, ProblemEntryData<X> entryData, List<UsageFeature> usedFeatures) {
-			List<AbstractFeature> features0 = sourceEntry.entryData.features;
+		public void completeData(ProblemEntryData<X> entryData, EcmaCompletionData problemThreadsafeData) {
+			List<AbstractFeature> features0 = entryData.source.entryData.features;
 			List<AbstractFeature> ecmaFeatures = new LinkedList<AbstractFeature>();
 			for (int i = 0; i < features0.size(); i++) {
 				AbstractFeature f0 = features0.get(i);
 				if (!(f0 instanceof EcmaFeature)) {
-					bindings.put(f0.description, f0.value);
+					problemThreadsafeData.bindings.put(f0.description, f0.value);
 				}
 			}
 			
-			for (String desc : ecmaFeatureScripts.keySet()) {
-				CompiledScript script = ecmaFeatureScripts.get(desc);
-				FeatureDataType type = ecmaFeatureDataTypes.get(desc);
+			for (String desc : problemThreadsafeData.ecmaFeatureScripts.keySet()) {
+				CompiledScript script = problemThreadsafeData.ecmaFeatureScripts.get(desc);
+				FeatureDataType type = problemThreadsafeData.ecmaFeatureDataTypes.get(desc);
 				try {
-					Object result0 = script.eval(bindings);
+					Object result0 = script.eval(problemThreadsafeData.bindings);
 					Double result = (Double)result0;
 					if(result.isNaN()) {
 						//System.out.println("Lolo");
@@ -151,17 +175,131 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		}
 	}
 
-	public static abstract class Problem<X extends ProblemEntry> {
+	public static abstract class Problem<X extends ProblemEntry, Y> {
 		public abstract ProblemEntryData<X> extractData(X entry) throws Exception;
 		public void completeDataStart(List<UsageFeature> usedFeatures) {};
-		public abstract void completeData(X sourceEntry, ProblemEntryData<X> entryData, List<UsageFeature> usedFeatures);
+		public abstract Y completeDataThreadStart();
+		public abstract void completeData(ProblemEntryData<X> entryData, Y problemThreadsafeData);
 		public void completeDataEnd(List<UsageFeature> usedFeatures){};
-	}
+		
+		protected class CompleteEntriesThread extends Thread {
+			Y problemThreadsafeData;
+			int modulo;
+			int threadCnt;
+			List<ProblemEntryData<X>> list;
+			CountDownLatch latch;
+			public CompleteEntriesThread(List<ProblemEntryData<X>> list, Y problemThreadsafeData, int modulo, int threadCnt, CountDownLatch latch) {
+				this.modulo = modulo;
+				this.threadCnt = threadCnt;
+				this.list = list;
+				this.latch = latch;
+				this.problemThreadsafeData = problemThreadsafeData;
+			}
+			@Override
+			public void run() {
+				System.out.println("Started thread:"+this.modulo);
+				for (int i = modulo; i < list.size(); i+=threadCnt) {
+					ProblemEntryData<X> element = list.get(i);
+					Problem.this.completeData(element, this.problemThreadsafeData);
+					int cmp = completedCount.incrementAndGet();
+				}
+				latch.countDown();
+				System.out.println("Completed thread:"+this.modulo);
+			}
+			
+		}
+		
+		AtomicInteger completedCount = new AtomicInteger();
+		public void completeEntries(List<ProblemEntryData<X>> entries, List<UsageFeature> usedFeatures) {
+			completedCount.set(0);
+			completeDataStart(usedFeatures);
+			System.out.println("completeEntries start");
+			ForestSettings settings = new ForestSettings();
+			int threadCnt = settings.maxNumberOfRunners;
+			threadCnt = 4;
+			CountDownLatch latch = new CountDownLatch(threadCnt);
+			for (int i = 0; i < threadCnt; i++) {
+				Y threadData = completeDataThreadStart();
+				CompleteEntriesThread th = new CompleteEntriesThread(entries
+						, threadData,  i, threadCnt, latch);
+				th.start();
+			} 
+			try {
+				latch.await();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			
+			
+			/*int completionStep = trainingEntries.size()/20;
+			int i = 0;
+			for (ProblemEntryData<X> problemEntryData : trainingEntries) {
+				problem.completeData(problemEntryData.source, problemEntryData, usedFeatures);
+				i++;
+				if((i%completionStep)==0) {
+					System.out.println("Completed "+(i*100)/trainingEntries.size()+"%");
+				}
+			}*/
+			/*
+			System.out.println("completeEntries test start");
+			Y threadData = completeDataThreadStart();
+			for (ProblemEntryData<X> problemEntryData : testEntries) {
+				completeData(problemEntryData, threadData);
+			}
+			problem.completeDataEnd(usedFeatures);
+			System.out.println("completeEntries end");*/
 
+		}
+	}
+	
+	/*protected class CompleteEntriesThread extends Thread {
+		Y problemThreadsafeData;
+		int modulo;
+		int threadCnt;
+		List<ProblemEntryData<X>> list;
+		CountDownLatch latch;
+		public CompleteEntriesThread(List<ProblemEntryData<X>> list, Y problemThreadsafeData, int modulo, int threadCnt, CountDownLatch latch) {
+			this.modulo = modulo;
+			this.threadCnt = threadCnt;
+			this.list = list;
+			this.latch = latch;
+			this.problemThreadsafeData = problemThreadsafeData;
+		}
+		@Override
+		public void run() {
+			System.out.println("Started thread:"+this.modulo);
+			for (int i = modulo; i < list.size(); i+=threadCnt) {
+				ProblemEntryData<X> element = list.get(i);
+				problem.completeData(element, this.problemThreadsafeData, usedFeatures);
+				int cmp = completedCount.incrementAndGet();
+			}
+			latch.countDown();
+			System.out.println("Completed thread:"+this.modulo);
+		}
+		
+	}
+	AtomicInteger completedCount = new AtomicInteger();
 	public void completeEntries() {
+		completedCount.set(0);
 		problem.completeDataStart(usedFeatures);
 		System.out.println("completeEntries start");
-		int completionStep = trainingEntries.size()/20;
+		ForestSettings settings = new ForestSettings();
+		int threadCnt = settings.maxNumberOfRunners;
+		threadCnt = 1;
+		CountDownLatch latch = new CountDownLatch(threadCnt);
+		for (int i = 0; i < threadCnt; i++) {
+			Y threadData = problem.completeDataThreadStart();
+			CompleteEntriesThread th = new CompleteEntriesThread(trainingEntries, threadData,  i, threadCnt, latch);
+			th.start();
+		} 
+		try {
+			latch.await();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		
+		
+		/*int completionStep = trainingEntries.size()/20;
 		int i = 0;
 		for (ProblemEntryData<X> problemEntryData : trainingEntries) {
 			problem.completeData(problemEntryData.source, problemEntryData, usedFeatures);
@@ -169,11 +307,23 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			if((i%completionStep)==0) {
 				System.out.println("Completed "+(i*100)/trainingEntries.size()+"%");
 			}
-		}
+		}*/
+		/*
 		System.out.println("completeEntries test start");
+		Y threadData = problem.completeDataThreadStart();
 		for (ProblemEntryData<X> problemEntryData : testEntries) {
-			problem.completeData(problemEntryData.source, problemEntryData, usedFeatures);
+			problem.completeData(problemEntryData, threadData, usedFeatures);
 		}
+		problem.completeDataEnd(usedFeatures);
+		System.out.println("completeEntries end");
+
+	}*/
+	
+	public void completeEntries() {
+		problem.completeDataStart(usedFeatures);
+		System.out.println("completeEntries start");
+		problem.completeEntries(this.trainingEntries, usedFeatures);
+		problem.completeEntries(this.testEntries, usedFeatures);
 		problem.completeDataEnd(usedFeatures);
 		System.out.println("completeEntries end");
 
@@ -256,7 +406,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	 */
 
 	private List<ProblemEntryData<X>> extractData(List<X> entries) {
-		List<ProblemEntryData<X>> toReturn = new ArrayList<ProblemEntryData<X>>(entries.size());
+		List<ProblemEntryData<X>> toReturn = new CopyOnWriteArrayList<ProblemEntryData<X>>();
 		for (X entry : entries) {
 			toReturn.add(extractData(entry));
 		}

@@ -104,7 +104,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		}
 		
 		protected void prepareEcmaOperations(List<UsageFeature> usedFeatures) {
-			double minUsage = 0.05;
+			double minUsage = 0.01;
 			ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
 			this.rootCompletionData.ecmaFeatureScripts.clear();
 			this.rootCompletionData.ecmaFeatureDataTypes.clear();
@@ -129,13 +129,18 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 							CompiledScript compiledScript = ((Compilable) scriptEngine).compile(newKey);
 							this.rootCompletionData.ecmaFeatureScripts.put(newKey, compiledScript);
 							this.rootCompletionData.ecmaFeatureDataTypes.put(newKey, d1.dataType);
+							newKey = "("+d1.description+")-("+d2.description+")";
+							compiledScript = ((Compilable) scriptEngine).compile(newKey);
+							this.rootCompletionData.ecmaFeatureScripts.put(newKey, compiledScript);
+							this.rootCompletionData.ecmaFeatureDataTypes.put(newKey, d1.dataType);
 							newKey = "("+d1.description+")*("+d2.description+")";
 							compiledScript = ((Compilable) scriptEngine).compile(newKey);
 							this.rootCompletionData.ecmaFeatureScripts.put(newKey, compiledScript);
 							this.rootCompletionData.ecmaFeatureDataTypes.put(newKey, d1.dataType);
-							//newKey = "("+d1.description+")/("+d2.description+")";
-							//compiledScript = ((Compilable) scriptEngine).compile(newKey);
-							//ecmaFeatureScripts.put(newKey, compiledScript);
+							newKey = "("+d1.description+")/("+d2.description+")";
+							compiledScript = ((Compilable) scriptEngine).compile(newKey);
+							this.rootCompletionData.ecmaFeatureScripts.put(newKey, compiledScript);
+							this.rootCompletionData.ecmaFeatureDataTypes.put(newKey, d1.dataType);
 						}
 					} catch (ScriptException e) {
 						e.printStackTrace();
@@ -148,9 +153,12 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		public void completeData(ProblemEntryData<X> entryData, EcmaCompletionData problemThreadsafeData) {
 			List<AbstractFeature> features0 = entryData.source.entryData.features;
 			List<AbstractFeature> ecmaFeatures = new LinkedList<AbstractFeature>();
+			Map<String, EcmaFeature> ecmaCache = new HashMap<String, EcmaFeature>(); 
 			for (int i = 0; i < features0.size(); i++) {
 				AbstractFeature f0 = features0.get(i);
-				if (!(f0 instanceof EcmaFeature)) {
+				if (f0 instanceof EcmaFeature) {
+					ecmaCache.put(f0.description, (EcmaFeature)f0);
+				} else {
 					problemThreadsafeData.bindings.put(f0.description, f0.value);
 				}
 			}
@@ -158,17 +166,23 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			for (String desc : problemThreadsafeData.ecmaFeatureScripts.keySet()) {
 				CompiledScript script = problemThreadsafeData.ecmaFeatureScripts.get(desc);
 				FeatureDataType type = problemThreadsafeData.ecmaFeatureDataTypes.get(desc);
-				try {
-					Object result0 = script.eval(problemThreadsafeData.bindings);
-					Double result = (Double)result0;
-					if(result.isNaN()) {
-						//System.out.println("Lolo");
-						result = Double.MIN_VALUE/2;
-					}
-					EcmaFeature toAdd = new EcmaFeature(desc, result, type);
+				if(ecmaCache.containsKey(desc)) {
+					//System.out.println("Using cache");
+					EcmaFeature toAdd = ecmaCache.get(desc);
 					ecmaFeatures.add(toAdd);
-				} catch (ScriptException e) {
-					e.printStackTrace();
+				} else {
+					try {
+						Object result0 = script.eval(problemThreadsafeData.bindings);
+						Double result = (Double)result0;
+						//if(result.isNaN()) {
+							//System.out.println("Lolo");
+						//	result = Double.MIN_VALUE/2;
+						//}
+						EcmaFeature toAdd = new EcmaFeature(desc, result, type);
+						ecmaFeatures.add(toAdd);
+					} catch (ScriptException e) {
+						e.printStackTrace();
+					}
 				}
 			}
 			features0.addAll(ecmaFeatures);
@@ -216,7 +230,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			System.out.println("completeEntries start");
 			ForestSettings settings = new ForestSettings();
 			int threadCnt = settings.maxNumberOfRunners;
-			threadCnt = 4;
+			//threadCnt = 4;
 			CountDownLatch latch = new CountDownLatch(threadCnt);
 			for (int i = 0; i < threadCnt; i++) {
 				Y threadData = completeDataThreadStart();
@@ -576,7 +590,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		// scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
 		// if(trainedCount==1) System.out.println("A tree has been built
 		// scheduledCount:"+scheduledCount+",builCount:"+trainedCount+",elapsedTime:"+elapsedTime);
-		if (trainedCount % 10 == 0) {
+		if (trainedCount % 1 == 0) {
 			System.out.println("A tree has been built scheduledCount:" + scheduledCount + ",builCount:" + trainedCount
 					+ ",elapsedTime:" + elapsedTime);
 		}

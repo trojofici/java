@@ -28,14 +28,14 @@ public class ForestRoot {
 	}
 	
 	public static class ForestSettings {
-		public int maxTrees = 4;
+		public int maxTrees = 8;
 		public double cutoffError = 0.01;
 		public int maxLevel = 500;
 		public long maxTime = 150000;
 		public double usedEntriesPercentage = 1.0d;
 		public double usedFeaturesPercentage = 0.9d;
 		public boolean runParallel = true;
-		public int maxNumberOfRunners = 8;
+		public int maxNumberOfRunners = 4;
 	}
 	/*public static class ForestSettings {
 		public int maxTrees = 1;
@@ -177,6 +177,7 @@ public class ForestRoot {
 				int maxNumberOfRunners = Math.min(settings.maxTrees, settings.maxNumberOfRunners);
 				ExecutorService executor = Executors.newFixedThreadPool(settings.maxNumberOfRunners);
 				CompletionService<RegressionTree> compService = new ExecutorCompletionService<RegressionTree>(executor);
+				System.out.println("Starting training threads");
 
 				for (int i = 0; i < maxNumberOfRunners; i++) {
 					RegressionTree tree = new RegressionTree(data, settings.maxLevel, settings.cutoffError,
@@ -519,6 +520,16 @@ public class ForestRoot {
 				}
 
 			}
+			
+			boolean checkValues(int featureIndex) {
+				for (int i = 0; i < entries.length; i++) {
+					if(Double.isNaN(entries[i][featureIndex])) {
+						//System.out.println("Feature NAN");
+						return false;
+					}
+				}
+				return true;
+			}
 
 			void calculateBestFeature(int[] featuresIndexes, Double2 bestAverages, Double2 bestErrors,
 					BestFeatureInfo bestInfo) {
@@ -528,6 +539,9 @@ public class ForestRoot {
 				for (int i = 0; i < featuresIndexes.length; i++) {
 					int featureIndex = featuresIndexes[i];
 					// System.out.println("Feature start:"+featureIndex);
+					if(!checkValues(featureIndex)) {
+						continue;
+					}
 					Arrays.sort(entries, new EntryFeatureComparator(featureIndex));
 					double av1 = 0.0f;
 					double e1 = 0.0f;

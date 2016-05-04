@@ -1,5 +1,6 @@
 package sequencing;
 
+import java.beans.FeatureDescriptor;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -12,7 +13,11 @@ public class DNAResearch implements IDNASequencing {
 	public static final byte C = 3;
 	public static final byte G = 4;
 	public static final byte N = 0;
-	public static int NUMBER_OF_FEATURES = 2;
+	public static int NUMBER_OF_FEATURES = 10;
+	public static int WINDOW_SIZE = 150;
+	public static int MAX_SEQUENCE_SIZE = 100000;
+	public static int PAD = 10;
+	public static int HISTOGRAM1 = 4;
 
 	Map<Integer, SequenceData> sequences = new ConcurrentHashMap<Integer, SequenceData>();
 
@@ -41,9 +46,20 @@ public class DNAResearch implements IDNASequencing {
 		return toReturn;
 	}
 
-	public static float[] applyFloatFilter(float[] data0, float[] filter) {
+	public static float[] applyFloatFilter(float[] data0, float[] filter, int pad) {
+		System.out.println("applyFloatFilter start data0.length"+data0.length);
 		int half = filter.length / 2;
-		float[] toReturn = new float[data0.length];
+		float[] toReturn = new float[data0.length-2*pad];
+		for (int i = pad; i < data0.length-pad; i++) {
+			float sum = 0;
+			for (int j = 0; j < filter.length; j++) {
+				sum += filter[j] * data0[i-half+j];
+			}
+			toReturn[i-pad] = sum;
+		}
+		System.out.println("applyFloatFilter end");
+		
+		/*
 		float[] data = new float[filter.length];
 		for (int i = 0; i < data0.length; i++) {
 			int min = Math.max(0, i - half);
@@ -67,7 +83,7 @@ public class DNAResearch implements IDNASequencing {
 				sum += filter[j] * data[j];
 			}
 			toReturn[i] = sum;
-		}
+		}*/
 		return toReturn;
 	}
 
@@ -83,10 +99,10 @@ public class DNAResearch implements IDNASequencing {
 			super();
 			this.id = id;
 			// this.source = source;
-			this.features = new float[NUMBER_OF_FEATURES][];
-			for (int i = 0; i < this.features.length; i++) {
-				this.features[i] = new float[source.length()];
-			}
+			//this.features = new float[NUMBER_OF_FEATURES][];
+			//for (int i = 0; i < this.features.length; i++) {
+			//	this.features[i] = new float[source.length()];
+			//}
 			atcg = new byte[source.length()];
 			for (int i = 0; i < source.length(); i++) {
 				char c = source.charAt(i);
@@ -126,28 +142,179 @@ public class DNAResearch implements IDNASequencing {
 		return 0;
 	}
 
-	private float[] aAndT = new float[150];
 	private float[] gaborFilter1  = gaborFilter(5, 3, 2);
+	
 
-	public float[] createFeatures(byte[] atcg, int startIndex, int endIndex) {
-		float[] toReturn = new float[NUMBER_OF_FEATURES];
-		int index = 0;
-		for (int i = startIndex; i < endIndex; i++) {
+	public void createFeatures(SequenceData sequence) {
+		int feaureIndex = 0;
+		float[] aAndT = new float[sequence.atcg.length+2*PAD];
+		sequence.features = new float[NUMBER_OF_FEATURES][];
+		/*for (int i = 0; i < this.features.length; i++) {
+			this.features[i] = new float[source.length()];
+		}*/
+		byte[] atcg = sequence.atcg;
+		for (int i = 0; i < PAD; i++) {
+			aAndT[i]=0;
+		}
+		for (int i = aAndT.length-PAD; i < aAndT.length; i++) {
+			aAndT[i]=0;
+		}
+		for (int i = 0; i < atcg.length; i++) {
 			switch (atcg[i]) {
 			case A:
-				aAndT[index]=1;
+				aAndT[i+PAD]=1;
 				break;
 			case T:
-				aAndT[index]=1;
+				aAndT[i+PAD]=1;
 				break;
 			default:
-				aAndT[index]=0;
+				aAndT[i+PAD]=0;
 			}
-			index++;
 		}
-		float[] datka = applyFloatFilter(aAndT, gaborFilter1);
+		
+		
+		float[] datka = applyFloatFilter(aAndT, gaborFilter1, PAD);
+		float[][] histo = createHistogramSequence(datka, HISTOGRAM1, WINDOW_SIZE);
+		for (int i = 0; i < histo.length; i++) {
+			sequence.features[feaureIndex] = histo[i];
+			feaureIndex++;
+		}
+	}
+	
+	public float[][] createHistogramSequence(float[] data, int cnt, int window) {
+		System.out.println("createHistogramSequence start");
+		float[][] toReturn = new float[cnt][];
+		int[] hist = new int[cnt];
+		Arrays.fill(hist, 0);
+		float min=Float.POSITIVE_INFINITY;
+		float max=Float.NEGATIVE_INFINITY;
+		for (int i = 0; i < data.length; i++) {
+			float d = data[i];
+			min = Math.min(min,d);
+			max = Math.max(max,d);
+		}
+		for (int i = 0; i < cnt; i++) {
+			toReturn[i] = new float[data.length];
+		}
+		float[] limits = new float[cnt];
+		limits[cnt-1] = Float.POSITIVE_INFINITY;
+		float step = (max-min)/(float)cnt;
+		
+		for (int i = 0; i < limits.length-1; i++) {
+			limits[i]=min+step*(i+1);
+		}
+		
+		for (int i = 0; i < window; i++) {
+			for (int j = 0; j < limits.length; j++) {
+				if(data[i]<limits[j]) {
+					hist[j]++;
+					break;
+				}
+			}
+		}
+		
+		for (int i = window; i < data.length; i++) {
+			for (int j = 0; j < limits.length; j++) {
+				toReturn[j][i-window] = hist[j];
+				if(data[i]<limits[j]) {
+					hist[j]++;
+					break;
+				}
+				if(data[i-window]<limits[j]) {
+					hist[j]--;
+					break;
+				}
+			}
+		}
+		System.out.println("createHistogramSequence end");
 		return toReturn;
 	}
+	
+	float[] aAndT;
+	public void assignmentInitArrays() {
+		this.aAndT = new float[WINDOW_SIZE+2*PAD];
+		Arrays.fill(aAndT, 0);
+	}
+	
+	
+	public float[] createFeatures(byte[] atcg, float[] aAndT) {
+		int feaureIndex = 0;
+		
+		float[] toReturn = new float[NUMBER_OF_FEATURES];
+		for (int i = 0; i < atcg.length; i++) {
+			switch (atcg[i]) {
+			case A:
+				aAndT[i+PAD]=1;
+				break;
+			case T:
+				aAndT[i+PAD]=1;
+				break;
+			default:
+				aAndT[i+PAD]=0;
+			}
+		}
+		
+		
+		float[] datka = applyFloatFilter(aAndT, gaborFilter1, PAD);
+		float[][] histo = createHistogramSequence(datka, HISTOGRAM1);
+		for (int i = 0; i < histo.length; i++) {
+			sequence.features[feaureIndex] = histo[i];
+			feaureIndex++;
+		}
+	}
+	
+	public float[][] createHistogramSequence(float[] data, int cnt) {
+		System.out.println("createHistogramSequence start");
+		float[][] toReturn = new float[cnt][];
+		int[] hist = new int[cnt];
+		Arrays.fill(hist, 0);
+		float min=Float.POSITIVE_INFINITY;
+		float max=Float.NEGATIVE_INFINITY;
+		for (int i = 0; i < data.length; i++) {
+			float d = data[i];
+			min = Math.min(min,d);
+			max = Math.max(max,d);
+		}
+		for (int i = 0; i < cnt; i++) {
+			toReturn[i] = new float[data.length];
+		}
+		float[] limits = new float[cnt];
+		limits[cnt-1] = Float.POSITIVE_INFINITY;
+		float step = (max-min)/(float)cnt;
+		
+		for (int i = 0; i < limits.length-1; i++) {
+			limits[i]=min+step*(i+1);
+		}
+		
+		for (int i = 0; i < window; i++) {
+			for (int j = 0; j < limits.length; j++) {
+				if(data[i]<limits[j]) {
+					hist[j]++;
+					break;
+				}
+			}
+		}
+		
+		for (int i = window; i < data.length; i++) {
+			for (int j = 0; j < limits.length; j++) {
+				toReturn[j][i-window] = hist[j];
+				if(data[i]<limits[j]) {
+					hist[j]++;
+					break;
+				}
+				if(data[i-window]<limits[j]) {
+					hist[j]--;
+					break;
+				}
+			}
+		}
+		System.out.println("createHistogramSequence end");
+		return toReturn;
+	}
+	
+	
+	
+	
 
 	@Override
 	public int preProcessing() {
@@ -156,61 +323,47 @@ public class DNAResearch implements IDNASequencing {
 		//byte[] data150 = new byte[150];
 		for (Integer sid : this.sequences.keySet()) {
 			SequenceData data = this.sequences.get(sid);
-			for (int i = 0; i < data.atcg.length - 150; i++) {
-				//data150 = Arrays.copyOfRange(data.atcg, i, i + data150.length);
-				float[] features = createFeatures(data.atcg, i, i+150);
-				for (int j = 0; j < features.length; j++) {
-					data.features[j][i] = features[j];
-				}
-				if(i%1000000==0) {
-					System.out.println("preprocessed:"+(i*100)/data.atcg.length+"%");
-				}
-				
-			}
-			/*
-			 * float[] input = new float[data.at.length]; for (int i = 0; i <
-			 * input.length; i++) { input[i] = Math.abs(data.at[i]); } float[]
-			 * filter = gaborFilter(5, 3, 2); //float[] filter = gaborFilter(9,
-			 * 2, 10000000); //'float[] filter = identityFilter(5, 2, 2);
-			 * System.out.println("Filter:"+Arrays.toString(filter));
-			 * 
-			 * float maxValue = 0; float[] filtered = applyFloatFilter(input,
-			 * filter); for (int i = 0; i < filtered.length; i++) {
-			 * if(filtered[i]>maxValue) maxValue = filtered[i]; }
-			 * System.out.println(maxValue);
-			 * 
-			 * float[] toDisplay = new float[100200-100000]; for (int i = 0; i <
-			 * toDisplay.length; i++) { toDisplay[i] = input[i+100000]; }
-			 * System.out.println(Arrays.toString(toDisplay)); for (int i = 0; i
-			 * < toDisplay.length; i++) { toDisplay[i] = filtered[i+100000]; }
-			 * System.out.println(Arrays.toString(toDisplay));
-			 * 
-			 * 
-			 * int bigCount = 0; float sum = 0; float lowValue = 0.8f; float
-			 * bigValue = 1.0f; for (int i = 0; i < filtered.length; i++) {
-			 * sum+=filtered[i]; if(filtered[i]<bigValue &&
-			 * filtered[i]>lowValue) { bigCount++; } if(i>=150) {
-			 * sum=-filtered[i-150]; if(filtered[i-150]<bigValue &&
-			 * filtered[i-150]>lowValue) { bigCount--; } if(i<100200 &&
-			 * i>100000) { System.out.print(bigCount+",");
-			 * //System.out.print(sum+","); } } }
-			 * 
-			 * 
-			 * 
-			 * 
-			 * 
-			 * //fullSequence.substring(100000, 100200)
-			 */
-
+			createFeatures(data);
 		}
 		System.out.println("preProcessing end");
 		return 0;
 	}
 
 	@Override
-	public String[] getAlignment(int nreads, double norm_a, double d, String[] array, String[] array2) {
-		// TODO Auto-generated method stub
-		return null;
+	public String[] getAlignment(int nreads, double norm_a, double d, String[] readName, String[] readSequence) {
+		String[] toReturn = new String[nreads];
+		float[][] probability = new float[this.sequences.size()][MAX_SEQUENCE_SIZE-WINDOW_SIZE]; 
+		for (int i = 0; i < readSequence.length; i++) {
+			String readN = readName[i];
+			String readS = readSequence[i];
+			
+			
+			
+			boolean found = false;
+			for (Integer sequenceId : this.sequences.keySet()) {
+				SequenceData fullSequence = this.sequences.get(sequenceId);
+				int index = fullSequence.indexOf(readS);
+				System.out.println(readN+":"+readS+":"+index);
+				if((i+1)%20==0) {
+					System.out.println((int)(i*100/(double)readSequence.length)+"% done");
+					System.out.println(readN+":"+readS+":"+index);
+				}
+				if(index>=0) {
+					String toAdd = readN+","+sequenceId+","+(index+1)+","+(index+1+readS.length())+",+,1.00";
+					System.out.println(toAdd);
+					toReturn[i]=toAdd;
+					found = true;
+					break;
+				}
+			}
+			if(!found) {
+				String toAdd = readN+","+1+","+1+","+1+",+,1.00";
+				System.out.println(toAdd);
+				toReturn[i]=toAdd;
+			}
+		}
+		
+		return toReturn;
 	}
 
 }

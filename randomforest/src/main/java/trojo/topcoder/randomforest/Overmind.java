@@ -104,7 +104,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		}
 		
 		protected void prepareEcmaOperations(List<UsageFeature> usedFeatures) {
-			double minUsage = 0.01;
+			double minUsage = 0.04;
 			ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
 			this.rootCompletionData.ecmaFeatureScripts.clear();
 			this.rootCompletionData.ecmaFeatureDataTypes.clear();

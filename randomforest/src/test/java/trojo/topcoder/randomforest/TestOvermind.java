@@ -21,7 +21,7 @@ public class TestOvermind {
 					//double val = i/j+k;
 					//double val = i*j+i*k;
 					//double val = 10d;
-					double val = i/(j-2*k);
+					double val = i/(j-k);
 					if(Double.isNaN(val)||Double.isInfinite(val)) {
 						//System.out.println("NAN");
 						val = -10;

@@ -16,6 +16,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.apache.commons.lang3.builder.ToStringBuilder;
+
 public class ForestRoot {
 	// public static Logger log = Logger.getLogger(ForestRoot.class.getName());
 	public static final int F_I = 2;
@@ -26,14 +28,14 @@ public class ForestRoot {
 	}
 	
 	public static class ForestSettings {
-		public int maxTrees = 100;
+		public int maxTrees = 8;
 		public double cutoffError = 0.01;
 		public int maxLevel = 500;
 		public long maxTime = 150000;
-		public double usedEntriesPercentage = 1.0f;
-		public double usedFeaturesPercentage = 1.0f;
+		public double usedEntriesPercentage = 1.0d;
+		public double usedFeaturesPercentage = 0.9d;
 		public boolean runParallel = true;
-		public int maxNumberOfRunners = 8;
+		public int maxNumberOfRunners = 4;
 	}
 	/*public static class ForestSettings {
 		public int maxTrees = 1;
@@ -53,6 +55,10 @@ public class ForestRoot {
 
 	public static class TreesInfo {
 		public int[] usedFeatures;
+		@Override
+		public String toString() {
+			return ToStringBuilder.reflectionToString(this);
+		}
 	}
 
 	public static class TreeInfo {
@@ -62,6 +68,11 @@ public class ForestRoot {
 	public static class ForestInfo {
 		public int numberOfTrees;
 		public List<TreesInfo> epochInfo = new LinkedList<TreesInfo>();
+		@Override
+		public String toString() {
+			//ToStringBuilder ts = new ToStringBuilder(this);
+			return ToStringBuilder.reflectionToString(this);
+		}
 	}
 
 	public static class RandomForest {
@@ -166,6 +177,7 @@ public class ForestRoot {
 				int maxNumberOfRunners = Math.min(settings.maxTrees, settings.maxNumberOfRunners);
 				ExecutorService executor = Executors.newFixedThreadPool(settings.maxNumberOfRunners);
 				CompletionService<RegressionTree> compService = new ExecutorCompletionService<RegressionTree>(executor);
+				System.out.println("Starting training threads");
 
 				for (int i = 0; i < maxNumberOfRunners; i++) {
 					RegressionTree tree = new RegressionTree(data, settings.maxLevel, settings.cutoffError,
@@ -179,6 +191,7 @@ public class ForestRoot {
 				// List<RegressionTree> completedTrees = Concurrent
 				long elapsedTime = 0;
 				while (true) {
+					trainedCnt++;
 					try {
 						//System.out.println("Wait for build tree trainedCnt:" + trainedCnt + ", scheduledCnt:" + scheduledCnt);
 						Future<RegressionTree> treeF = compService.take();
@@ -191,7 +204,7 @@ public class ForestRoot {
 					} catch (ExecutionException ex) {
 						ex.printStackTrace();
 					} finally {
-						trainedCnt++;
+						//trainedCnt++;
 					}
 					if (!timeout) {
 						timeout = (System.currentTimeMillis() > startTime + settings.maxTime);
@@ -482,10 +495,6 @@ public class ForestRoot {
 				for (int i = 0; i < right.size(); i++) {
 					toReturn.right[i] = right.get(i);
 				}
-				// System.out.println("After split left:"+toString(toReturn.left,
-				// 1));
-				// System.out.println("After split right:"+toString(toReturn.right,
-				// 1));
 				return toReturn;
 			}
 
@@ -511,6 +520,16 @@ public class ForestRoot {
 				}
 
 			}
+			
+			boolean checkValues(int featureIndex) {
+				for (int i = 0; i < entries.length; i++) {
+					if(Double.isNaN(entries[i][featureIndex])) {
+						//System.out.println("Feature NAN");
+						return false;
+					}
+				}
+				return true;
+			}
 
 			void calculateBestFeature(int[] featuresIndexes, Double2 bestAverages, Double2 bestErrors,
 					BestFeatureInfo bestInfo) {
@@ -520,6 +539,9 @@ public class ForestRoot {
 				for (int i = 0; i < featuresIndexes.length; i++) {
 					int featureIndex = featuresIndexes[i];
 					// System.out.println("Feature start:"+featureIndex);
+					if(!checkValues(featureIndex)) {
+						continue;
+					}
 					Arrays.sort(entries, new EntryFeatureComparator(featureIndex));
 					double av1 = 0.0f;
 					double e1 = 0.0f;
@@ -534,16 +556,21 @@ public class ForestRoot {
 						double av2_0 = av2;
 						av1 = av1 + (v - av1) / (double) (j);
 						av2 = av2 + (av2 - v) / (double) (n - j);
+//						if(Double.isNaN(av1)||Double.isNaN(av2new)||Double.isNaN(e1)||Double.isNaN(e2)) {
+//							System.out.println("Lolo");
+//							
+//						}
 						// System.out.println("Averages:"+av1+":"+av2);
 						e1 = e1 + v * v + (double) (j - 1) * av1_0 * av1_0 - (double) j * av1 * av1;
 						e2 = e2 - v * v + (double) (n - j + 1) * av2_0 * av2_0 - (double) (n - j) * av2 * av2;
 						// System.out.println("Errors:"+e1+":"+e2);
-						if (entries[j][featureIndex] == entries[j - 1][featureIndex]) {
+						boolean valEqual = entries[j][featureIndex] == entries[j - 1][featureIndex]; 
+						if (valEqual) {
 							// System.out.println("Jump to next. Same values");
 							continue;
 						}
 
-						if (e1 + e2 < minErrorSum) {
+						if (e1 + e2 < minErrorSum - 0.000001) {
 							minErrorSum = e1 + e2;
 							bestErrors.left = e1;
 							bestErrors.right = e2;
@@ -552,7 +579,14 @@ public class ForestRoot {
 							bestInfo.splitFeature = featureIndex;
 							bestInfo.splitVal = entries[j][featureIndex];
 						}
+//						if(Double.isNaN(av1)||Double.isNaN(av2)||Double.isNaN(e1)||Double.isNaN(e2)) {
+//							System.out.println("Lolo");
+//							
+//						}
 					}
+//					if(bestInfo.splitFeature==-1) {
+//						System.out.println("Lolo");
+//					}
 					// System.out.println("Feature end:"+featureIndex);
 				}
 				if (bestErrors.left < 0.0f)

@@ -15,7 +15,7 @@ import javax.sound.midi.Sequencer;
 
 class TestRun {
 	
-	public static final int CUTOFF = 1; 
+	public static final int CUTOFF = Integer.MAX_VALUE; 
 	
 	public int initTest(int testDifficulty) {
 		return 0;

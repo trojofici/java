@@ -35,7 +35,7 @@ public class ForestRoot {
 		public double usedEntriesPercentage = 1.0d;
 		public double usedFeaturesPercentage = 0.9d;
 		public boolean runParallel = true;
-		public int maxNumberOfRunners = 4;
+		public int maxNumberOfRunners = 8;
 	}
 	/*public static class ForestSettings {
 		public int maxTrees = 1;
@@ -570,7 +570,7 @@ public class ForestRoot {
 							continue;
 						}
 
-						if (e1 + e2 < minErrorSum - 0.000001) {
+						if (e1 + e2 < minErrorSum * 0.9999) {
 							minErrorSum = e1 + e2;
 							bestErrors.left = e1;
 							bestErrors.right = e2;

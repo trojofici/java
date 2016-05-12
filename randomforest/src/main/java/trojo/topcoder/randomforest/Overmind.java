@@ -1,6 +1,7 @@
 package trojo.topcoder.randomforest;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -104,7 +105,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		}
 		
 		protected void prepareEcmaOperations(List<UsageFeature> usedFeatures) {
-			double minUsage = 0.04;
+			double minUsage = 0.02;
 			ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("ecmascript");
 			this.rootCompletionData.ecmaFeatureScripts.clear();
 			this.rootCompletionData.ecmaFeatureDataTypes.clear();
@@ -382,6 +383,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	}
 	
 	public void printUsedFeatures() {
+		Collections.sort(this.usedFeatures);
 		for (UsageFeature f : this.usedFeatures) {
 			if(f.usedCount>0) {
 				System.out.println(f.description + "\t\t:" + f.usedCount+"\t\t:"+f.usedRatio);
@@ -550,7 +552,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 	
 	
 	
-	public static class UsageFeature {
+	public static class UsageFeature implements Comparable<UsageFeature>{
 		public static enum FeatureUsageType {
 			INPUT, ECMA;
 		}
@@ -568,6 +570,10 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			this.usedCount = usedCount;
 			this.featureType = type;
 			this.dataType = dataType;
+		}
+		@Override
+		public int compareTo(UsageFeature o) {
+			return -Integer.compare(this.usedCount, o.usedCount);
 		}
 	}
 

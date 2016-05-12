@@ -17,13 +17,15 @@ public class TestOvermind {
 		List<DoubleEntry> train = new ArrayList<DoubleEntry>();
 		for (double i = 0; i < 10; i+=0.5) {
 			for (double j = 0; j < 10; j+=0.5) {
-				for (double k = 0; k < 10; k+=0.5) {
-					//double val = i/j+k;
-					//double val = i*j+i*k;
-					//double val = 10d;
-					double val = i/(j-k);
+				for (double k = 0.25; k < 10.25; k+=0.5) {
+					double val=0;
+					if(j>10) {
+						val = i/(j-k);
+					} else {
+						val = i/(j+k);
+					}
+					
 					if(Double.isNaN(val)||Double.isInfinite(val)) {
-						//System.out.println("NAN");
 						val = -10;
 					}
 					train.add(new DoubleEntry(i, new double[]{i,j,k}, val));

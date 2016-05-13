@@ -33,7 +33,7 @@ public class ForestRoot {
 		public int maxLevel = 500;
 		public long maxTime = 150000;
 		public double usedEntriesPercentage = 1.0d;
-		public double usedFeaturesPercentage = 0.9d;
+		public double usedFeaturesPercentage = 1.0d;
 		public boolean runParallel = true;
 		public int maxNumberOfRunners = 8;
 	}

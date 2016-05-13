@@ -15,6 +15,7 @@ public class TestOvermind {
 	public static void main(String[] args) {
 		DoubleProblem testProblem = new DoubleProblem();
 		List<DoubleEntry> train = new ArrayList<DoubleEntry>();
+		long start = System.currentTimeMillis();
 		for (double i = 0; i < 10; i+=0.5) {
 			for (double j = 0; j < 10; j+=0.5) {
 				for (double k = 0.25; k < 10.25; k+=0.5) {
@@ -36,7 +37,7 @@ public class TestOvermind {
 		List<DoubleEntry> test = new ArrayList<DoubleEntry>();
 		test.add(new DoubleEntry(666, new double[]{7d,8d,14.5d}, 13d));
 		Overmind<DoubleEntry> over = new Overmind<DoubleEntry>(testProblem, train, test);
-		for (int i = 0; i < 10; i++) {
+		for (int i = 0; i < 4; i++) {
 			over.completeEntries();
 			over.train();
 			over.fillTestOutput();
@@ -47,6 +48,7 @@ public class TestOvermind {
 			over.printUsedFeatures();
 			
 		}
+		System.out.println("Executed in:"+(System.currentTimeMillis()-start)/1000);
 	}
 
 }

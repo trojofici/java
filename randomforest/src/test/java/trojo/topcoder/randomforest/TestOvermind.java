@@ -16,16 +16,16 @@ public class TestOvermind {
 		DoubleProblem testProblem = new DoubleProblem();
 		List<DoubleEntry> train = new ArrayList<DoubleEntry>();
 		long start = System.currentTimeMillis();
-		for (double i = 0; i < 10; i+=0.5) {
-			for (double j = 0; j < 10; j+=0.5) {
-				for (double k = 0.25; k < 10.25; k+=0.5) {
+		for (double i = 5; i < 20; i+=0.5) {
+			for (double j = 5; j < 20; j+=0.5) {
+				for (double k = 5.25; k < 20.25; k+=0.5) {
 					double val=0;
-					if(j>10) {
-						val = i/(j-k);
+					/*if((i+j)*k>10) {
+						val = 10;
 					} else {
-						val = i/(j+k);
-					}
-					
+						val = 20;
+					}*/
+					val = (i+j)*k;
 					if(Double.isNaN(val)||Double.isInfinite(val)) {
 						val = -10;
 					}
@@ -35,7 +35,7 @@ public class TestOvermind {
 		}
 
 		List<DoubleEntry> test = new ArrayList<DoubleEntry>();
-		test.add(new DoubleEntry(666, new double[]{7d,8d,14.5d}, 13d));
+		test.add(new DoubleEntry(666, new double[]{7.1d,8.1d,14.1d}, 13d));
 		Overmind<DoubleEntry> over = new Overmind<DoubleEntry>(testProblem, train, test);
 		for (int i = 0; i < 4; i++) {
 			over.completeEntries();

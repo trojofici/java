@@ -76,6 +76,11 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		EcmaCompletionData rootCompletionData = new EcmaCompletionData();
 		
 		@Override
+		public int[] getPrefferedFeatureOrder(List<UsageFeature> usedFeatures) {
+			return super.getPrefferedFeatureOrder(usedFeatures);
+		}
+		
+		@Override
 		public void completeDataStart(List<UsageFeature> usedFeatures) {
 			super.completeDataStart(usedFeatures);
 			prepareEcmaOperations(usedFeatures);
@@ -196,6 +201,10 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		public abstract Y completeDataThreadStart();
 		public abstract void completeData(ProblemEntryData<X> entryData, Y problemThreadsafeData);
 		public void completeDataEnd(List<UsageFeature> usedFeatures){};
+		
+		public int[] getPrefferedFeatureOrder(List<UsageFeature> usedFeatures) {
+			return new int[0];
+		}
 		
 		protected class CompleteEntriesThread extends Thread {
 			Y problemThreadsafeData;
@@ -361,7 +370,7 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 			// System.out.println("Train data:"+Arrays.toString(trainData[i]));
 		}
 		ForestSettings settings = new ForestSettings();
-		this.forest.executeTraining(trainData, settings);
+		this.forest.executeTraining(trainData, settings, this.problem.getPrefferedFeatureOrder(this.usedFeatures));
 		fillFeatureUsageInfo();
 	}
 	
@@ -380,10 +389,10 @@ public class Overmind<X extends ProblemEntry> implements ForestListener {
 		for (UsageFeature uf : usedFeatures) {
 			uf.usedRatio = (double)uf.usedCount/usedSum;
 		}
+		Collections.sort(this.usedFeatures);
 	}
 	
 	public void printUsedFeatures() {
-		Collections.sort(this.usedFeatures);
 		for (UsageFeature f : this.usedFeatures) {
 			if(f.usedCount>0) {
 				System.out.println(f.description + "\t\t:" + f.usedCount+"\t\t:"+f.usedRatio);

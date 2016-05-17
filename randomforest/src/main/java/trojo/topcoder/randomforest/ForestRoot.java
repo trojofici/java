@@ -16,6 +16,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import javax.print.attribute.standard.NumberOfInterveningJobs;
+
 import org.apache.commons.lang3.builder.ToStringBuilder;
 
 public class ForestRoot {
@@ -29,7 +31,8 @@ public class ForestRoot {
 	
 	public static class ForestSettings {
 		public int maxTrees = 8;
-		public double cutoffError = 0.01;
+		public double cutoffError = 1.0;
+		public int minEntriesPerNode = 3;
 		public int maxLevel = 500;
 		public long maxTime = 150000;
 		public double usedEntriesPercentage = 1.0d;
@@ -163,7 +166,7 @@ public class ForestRoot {
 			trees.clear();
 		}
 
-		void executeTraining(final double[][] data, ForestSettings settings) {
+		void executeTraining(final double[][] data, ForestSettings settings, int[] prefferedOrder) {
 			this.clear();
 			long startTime = System.currentTimeMillis();
 			int usedFeaturesCount = data[0].length - F_I;
@@ -180,9 +183,9 @@ public class ForestRoot {
 				System.out.println("Starting training threads");
 
 				for (int i = 0; i < maxNumberOfRunners; i++) {
-					RegressionTree tree = new RegressionTree(data, settings.maxLevel, settings.cutoffError,
+					RegressionTree tree = new RegressionTree(data, settings.maxLevel, settings.cutoffError, settings.minEntriesPerNode,
 							settings.usedEntriesPercentage, usedFeaturesCount, epoch);
-					ForestTask task = new ForestTask(tree);
+					ForestTask task = new ForestTask(tree, prefferedOrder);
 					scheduledCnt++;
 					compService.submit(task);
 				}
@@ -210,9 +213,9 @@ public class ForestRoot {
 						timeout = (System.currentTimeMillis() > startTime + settings.maxTime);
 					}
 					if (!timeout && scheduledCnt < settings.maxTrees) {
-						RegressionTree tree = new RegressionTree(data, settings.maxLevel, settings.cutoffError,
+						RegressionTree tree = new RegressionTree(data, settings.maxLevel, settings.cutoffError, settings.minEntriesPerNode,
 								settings.usedEntriesPercentage, usedFeaturesCount, epoch);
-						ForestTask task = new ForestTask(tree);
+						ForestTask task = new ForestTask(tree, prefferedOrder);
 						scheduledCnt++;
 						compService.submit(task);
 					}
@@ -237,9 +240,9 @@ public class ForestRoot {
 						//3000:500:0.01:0.800000011920929:70:0
 						//3000:500:0.01:0.8:70:0
 						//System.out.println(data.length+":"+settings.maxLevel+":"+settings.cutoffError+":"+settings.usedEntriesPercentage+":"+usedFeaturesCount+":"+epoch);
-						RegressionTree tree = new RegressionTree(data, settings.maxLevel, settings.cutoffError,
+						RegressionTree tree = new RegressionTree(data, settings.maxLevel, settings.cutoffError, settings.minEntriesPerNode,
 								settings.usedEntriesPercentage, usedFeaturesCount, epoch);
-						tree.build();
+						tree.build(prefferedOrder);
 						this.add(tree);
 						i++;
 						trees++;
@@ -269,14 +272,16 @@ public class ForestRoot {
 
 		class ForestTask implements Callable<RegressionTree> {
 			RegressionTree tree;
+			int[] prefferedOrder;
 
-			ForestTask(RegressionTree tree) {
+			ForestTask(RegressionTree tree,int[] prefferedOrder) {
 				this.tree = tree;
+				this.prefferedOrder = prefferedOrder;
 			}
 
 			@Override
 			public RegressionTree call() throws Exception {
-				this.tree.build();
+				this.tree.build(this.prefferedOrder);
 				return this.tree;
 			}
 
@@ -285,7 +290,7 @@ public class ForestRoot {
 
 	static class RegressionTree {
 		int epoch;
-		private static final int MIN_ENTRIES_PER_NODE = 3;
+		//private static final int MIN_ENTRIES_PER_NODE = 3;
 		private Node rootNode;
 		private Random rnd = new Random();
 		private double[][] treeData;
@@ -293,6 +298,7 @@ public class ForestRoot {
 		int usedFeaturesCount;
 		int maxLevel;
 		double cutoffError;
+		int minEntriesPerNode;
 
 		private double[][] selectEntries() {
 			double[][] toReturn = makeRandomArray(treeData, usedEntriesPercentage);
@@ -325,7 +331,7 @@ public class ForestRoot {
 
 		}
 
-		private int[] selectFeatures() {
+		private int[] selectFeatures(int[] prefferedOrder) {
 			int numberOfFeatures = treeData[0].length - F_I;
 			int numberOfThrowAways = numberOfFeatures - usedFeaturesCount;
 			Set<Integer> toThrowOut = new HashSet<Integer>(numberOfThrowAways);
@@ -335,13 +341,28 @@ public class ForestRoot {
 			}
 			int[] toReturn = new int[usedFeaturesCount];
 			int cnt = 0;
-			for (int i = 0; i < numberOfFeatures; i++) {
-				if (!toThrowOut.contains(i)) {
-					toReturn[cnt] = i + F_I;
-					cnt++;
+			if(prefferedOrder==null || prefferedOrder.length==0) {
+				for (int i = 0; i < numberOfFeatures; i++) {
+					if (!toThrowOut.contains(i)) {
+						toReturn[cnt] = i + F_I;
+						cnt++;
+					}
 				}
+				return toReturn;
+			} else {
+				if(prefferedOrder.length!=numberOfFeatures) {
+					throw new IllegalArgumentException("prefferedOrder wrong size:"+prefferedOrder.length);
+				}
+				for (int i = 0; i < numberOfFeatures; i++) {
+					if (!toThrowOut.contains(i)) {
+						toReturn[cnt] = prefferedOrder[i] + F_I;
+						cnt++;
+					}
+				}
+				return toReturn;
 			}
-			return toReturn;
+			
+			
 		}
 
 		private double calculateAverage(double[][] entries) {
@@ -363,13 +384,13 @@ public class ForestRoot {
 			return sum;
 		}
 
-		void build() {
+		void build(int[] prefferedOrder) {
 			try {
 				double[][] selectedEntries = this.selectEntries();
 				double average = calculateAverage(selectedEntries);
 				double error = calculateError(selectedEntries, average);
 				this.rootNode = new Node(1, selectedEntries, average, error);
-				this.rootNode.build();
+				this.rootNode.build(prefferedOrder);
 			} catch (Throwable th) {
 				System.out.println("Build failed");
 				th.printStackTrace();
@@ -391,13 +412,14 @@ public class ForestRoot {
 			return toReturn;
 		}
 
-		RegressionTree(final double[][] data, final int maxLevel, double cutoffError, double usedEntriesPercentage,
+		RegressionTree(final double[][] data, final int maxLevel, double cutoffError, int minEntriesPerNode, double usedEntriesPercentage,
 				int usedFeaturesCount, int epoch) {
 			this.treeData = data;
 			this.maxLevel = maxLevel;
 			this.usedEntriesPercentage = usedEntriesPercentage;
 			this.usedFeaturesCount = usedFeaturesCount;
 			this.cutoffError = cutoffError;
+			this.minEntriesPerNode = minEntriesPerNode;
 			this.epoch = epoch;
 		}
 
@@ -570,7 +592,7 @@ public class ForestRoot {
 							continue;
 						}
 
-						if (e1 + e2 < minErrorSum * 0.9999) {
+						if (e1 + e2 < minErrorSum * 0.999 && e1 + e2 < minErrorSum - 0.0001) {
 							minErrorSum = e1 + e2;
 							bestErrors.left = e1;
 							bestErrors.right = e2;
@@ -596,8 +618,8 @@ public class ForestRoot {
 				// System.out.println("Calculated best:"+this);
 			}
 
-			void build() {
-				if (this.entries.length <= MIN_ENTRIES_PER_NODE) {
+			void build(int[] prefferedOrder) {
+				if (this.entries.length <= minEntriesPerNode) {
 					//System.out.println("Stopped on min nodes:"+this.toString());
 					return;
 				}
@@ -612,7 +634,7 @@ public class ForestRoot {
 
 				Double2 bestAverages = new Double2();
 				Double2 bestErrors = new Double2();
-				int[] featuresIndexes = selectFeatures();
+				int[] featuresIndexes = selectFeatures(prefferedOrder);
 				calculateBestFeature(featuresIndexes, bestAverages, bestErrors, this.bestFeature);
 				DoubleArray2 entryIndexes2 = splitOnFeature(bestFeature.splitFeature, bestFeature.splitVal);
 
@@ -623,8 +645,8 @@ public class ForestRoot {
 				this.right = rightNode;
 				this.left = leftNode;
 				this.entries = new double[1][this.entries[0].length];
-				this.left.build();
-				this.right.build();
+				this.left.build(prefferedOrder);
+				this.right.build(prefferedOrder);
 
 			}
 
